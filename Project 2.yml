@@ -1,0 +1,340 @@
+Parameters:
+    EnvironmentName:
+        Description: The Environment Name
+        Type: String
+    AvailabilityZone1:
+        Description: Availability Zone 1
+        Type: String
+    AvailabilityZone2:
+        Description: Availability Zone 2
+        Type: String
+    VPCCIDR:
+        Description: VPC CIDR Block
+        Type: String
+    EC2InstanceType:
+        Description: EC2 Instance Type
+        Type: String
+    EC2ImageId:
+        Description: EC2 Image ID
+        Type: String
+Resources:
+    myVPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: !Ref VPCCIDR
+            EnableDnsSupport: 'true'
+            EnableDnsHostnames: 'true'
+            Tags:
+              - Key: Name
+                Value: !Ref EnvironmentName
+    
+    myInternetGateway:
+        Type: AWS::EC2::InternetGateway
+        Properties:
+            Tags:
+                - Key: Name
+                  Value: !Ref EnvironmentName
+    
+    internetGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties: 
+            InternetGatewayId: !Ref myInternetGateway
+            VpcId: !Ref myVPC
+
+    publicSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref myVPC
+            CidrBlock: 10.0.1.0/24
+            MapPublicIpOnLaunch: true
+            AvailabilityZone: !Ref AvailabilityZone1
+            Tags:
+                - Key: Name
+                  Value: !Ref EnvironmentName
+    
+    publicSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref myVPC
+            CidrBlock: 10.0.2.0/24
+            MapPublicIpOnLaunch: true
+            AvailabilityZone: !Ref AvailabilityZone2
+            Tags:
+                - Key: Name
+                  Value: !Ref EnvironmentName
+
+    privateSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref myVPC
+            CidrBlock: 10.0.3.0/24
+            MapPublicIpOnLaunch: false
+            AvailabilityZone: !Ref AvailabilityZone1
+            Tags:
+                - Key: Name
+                  Value: !Ref EnvironmentName
+    
+    privateSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref myVPC
+            CidrBlock: 10.0.4.0/24
+            MapPublicIpOnLaunch: false
+            AvailabilityZone: !Ref AvailabilityZone2
+            Tags:
+                - Key: Name
+                  Value: !Ref EnvironmentName
+
+    NatGateway1EIP:
+        DependsOn: internetGatewayAttachment
+        Type: AWS::EC2::EIP
+        Properties:
+            Domain: vpc
+    
+    NatGateway2EIP:
+        DependsOn: internetGatewayAttachment
+        Type: AWS::EC2::EIP
+        Properties:
+            Domain: vpc
+
+    NatGateway1:
+        Type: AWS::EC2::NatGateway
+        Properties: 
+            AllocationId: !GetAtt NatGateway1EIP.AllocationId
+            SubnetId: !Ref publicSubnet1
+            Tags:
+                - Key: Name
+                  Value: !Ref EnvironmentName
+
+    NatGateway2:
+      Type: AWS::EC2::NatGateway
+      Properties: 
+          AllocationId: !GetAtt NatGateway2EIP.AllocationId
+          SubnetId: !Ref publicSubnet2
+          Tags:
+              - Key: Name
+                Value: !Ref EnvironmentName
+
+    publicRouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties: 
+            VpcId: !Ref myVPC
+            Tags:
+                - Key: Name
+                  Value: !Ref EnvironmentName
+
+    publicRoute:
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref publicRouteTable
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref myInternetGateway
+    
+    
+    publicRouteTableAssosiation1:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref publicRouteTable
+            SubnetId: !Ref publicSubnet1
+
+    publicRouteTableAssosiation2:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref publicRouteTable
+            SubnetId: !Ref publicSubnet2
+
+    privateRouteTable1:
+        Type: AWS::EC2::RouteTable
+        Properties: 
+          VpcId: !Ref myVPC
+          Tags:
+              - Key: Name
+                Value: !Ref EnvironmentName
+
+    privateRouteTable2:
+        Type: AWS::EC2::RouteTable
+        Properties: 
+          VpcId: !Ref myVPC
+          Tags:
+              - Key: Name
+                Value: !Ref EnvironmentName
+    
+    myPrivateRouteTableAssosiation1:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref privateRouteTable1
+            SubnetId: !Ref privateSubnet1
+
+    myPrivateRouteTableAssosiation2:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref privateRouteTable2
+            SubnetId: !Ref privateSubnet2
+
+    privateRoute:
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref privateRouteTable1
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref NatGateway1
+
+    privateRoute:
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref privateRouteTable2
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref NatGateway2
+
+    myLBSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties: 
+          GroupName: !Sub ${EnvironmentName}-LoadBalancerSecurityGroup
+          GroupDescription: Load Balancer SecurityGroup
+          VpcId: !Ref myVPC
+          SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIp: 0.0.0.0/0
+          SecurityGroupEgress:
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIp: 0.0.0.0/0
+          Tags:
+              - Key: Name
+                Value: !Ref EnvironmentName
+    
+    myWebServerSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties: 
+          GroupName: !Sub ${EnvironmentName}-WebServerSecurityGroup
+          GroupDescription: Web Server SecurityGroup
+          VpcId: !Ref myVPC
+          SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIp: 0.0.0.0/0
+          SecurityGroupEgress:
+              - IpProtocol: -1
+                FromPort: -1
+                ToPort: -1
+                CidrIp: 0.0.0.0/0
+          Tags:
+              - Key: Name
+                Value: !Ref EnvironmentName
+
+
+    myWebAppLaunchConfiguration:
+        Type: AWS::AutoScaling::LaunchConfiguration
+        Properties: 
+            AssociatePublicIpAddress: true
+            IamInstanceProfile: !Ref ProfileWithS3ReadOnlyRole
+            BlockDeviceMappings: 
+                - DeviceName: "/dev/sdk"
+                  Ebs:
+                    VolumeSize: '15'
+            ImageId: !Ref EC2ImageId
+            InstanceType: !Ref EC2InstanceType
+            SecurityGroups: 
+                - !Ref myWebServerSecurityGroup
+            UserData:
+                Fn::Base64: !Sub |
+                    apt-get update -y
+                    apt-get install apache2 -y
+                    systemctl start apache2.service
+                    cd /var/www/html
+                    echo "it works! Udagram, Udacity" > index.html
+
+    myWebAppTargetGroup:
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+        Properties:
+            HealthCheckIntervalSeconds: 10
+            HealthCheckPath: /
+            HealthCheckProtocol: HTTP
+            HealthCheckTimeoutSeconds: 8
+            HealthyThresholdCount: 3
+            Port: 80
+            Protocol: HTTP
+            UnhealthyThresholdCount: 3
+            VpcId: !Ref myVPC
+
+    myAutoScalingGroup:
+      Type: AWS::AutoScaling::AutoScalingGroup
+      Properties:
+          VPCZoneIdentifier: 
+              - !Ref privateSubnet1
+              - !Ref privateSubnet2
+          LaunchConfigurationName: !Ref myWebAppLaunchConfiguration
+          MaxSize: '6'
+          MinSize: '2'
+          DesiredCapacity: '4'
+          TargetGroupARNs: 
+              - !Ref myWebAppTargetGroup
+
+    
+         
+    myloadBalancer:
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+        Properties: 
+          Name: "UdacityProject917917917"
+          SecurityGroups: 
+            - !Ref myLBSecurityGroup
+          Subnets: 
+              - !Ref publicSubnet1
+              - !Ref publicSubnet2
+          Tags:
+              - Key: Name
+                Value: !Ref EnvironmentName
+
+    Listener:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Properties:
+          DefaultActions:
+              - Type: forward
+                TargetGroupArn: !Ref myWebAppTargetGroup
+          LoadBalancerArn: !Ref myloadBalancer
+          Port: '80'
+          Protocol: HTTP
+    ALBListenerRule:
+        Type: AWS::ElasticLoadBalancingV2::ListenerRule
+        Properties:
+            Actions:
+                - Type: forward
+                  TargetGroupArn: !Ref myWebAppTargetGroup
+            Conditions:
+            - Field: path-pattern
+              Values: [/]
+            ListenerArn: !Ref Listener
+            Priority: 1
+
+    S3ReadOnlyRole: 
+        Type: "AWS::IAM::Role"
+        Properties: 
+            AssumeRolePolicyDocument: 
+                Version: "2012-10-17"
+                Statement: 
+                    - Effect: "Allow"
+                      Principal: 
+                          Service: 
+                            - "s3.amazonaws.com"
+                      Action: 
+                          - "sts:AssumeRole"
+            ManagedPolicyArns:
+                - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+                - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+
+    ProfileWithS3ReadOnlyRole:
+        Type: AWS::IAM::InstanceProfile
+        Properties: 
+            Roles: 
+                - !Ref S3ReadOnlyRole
+      
+Outputs:
+    loadBalancerURL:
+        Description: The url of the load balancer with leading http
+        Value: 
+            Fn::Join: [ "", [ "http://", !GetAtt myloadBalancer.DNSName ] ] 
+        Export:
+            Name: loadBalancerURL

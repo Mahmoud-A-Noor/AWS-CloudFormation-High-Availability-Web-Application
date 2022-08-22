@@ -1,0 +1,26 @@
+[
+	{
+		"ParameterKey": "EnvironmentName",
+		"ParameterValue": "UdacityProject"
+	},
+	{
+		"ParameterKey": "AvailabilityZone1",
+		"ParameterValue": "us-east-1a"
+	},
+	{
+		"ParameterKey": "AvailabilityZone2",
+		"ParameterValue": "us-east-1b"
+	},
+	{
+		"ParameterKey": "VPCCIDR",
+		"ParameterValue": "10.0.0.0/16"
+	},
+	{
+		"ParameterKey": "EC2InstanceType",
+		"ParameterValue": "t2.micro"
+	},
+	{
+		"ParameterKey": "EC2ImageId",
+		"ParameterValue": "ami-0cff7528ff583bf9a"
+	}
+]
